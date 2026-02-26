@@ -49,7 +49,7 @@ DNS = 1.1.1.1
 [Peer]
 PublicKey = $SERVER_PUB
 # This is the ONLY variable Terraform will dynamically replace:
-Endpoint = ${accelerator_ip}:51820
+Endpoint = ${domain}:443
 AllowedIPs = 0.0.0.0/0
 PersistentKeepalive = 25
 EOF

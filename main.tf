@@ -25,8 +25,8 @@ resource "aws_security_group" "vpn_sg" {
 
   ingress {
     description = "WireGuard UDP"
-    from_port   = 51820
-    to_port     = 51820
+    from_port   = 443
+    to_port     = 443
     protocol    = "udp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -54,7 +54,7 @@ resource "aws_instance" "instance" {
   vpc_security_group_ids = [aws_security_group.vpn_sg.id]
 
   user_data = templatefile("${path.module}/setup.tpl", {
-    accelerator_ip = aws_globalaccelerator_accelerator.accelerator.ip_sets[0].ip_addresses[0]
+    domain = local.full_domain
   })
 
   tags = {
@@ -78,8 +78,8 @@ resource "aws_globalaccelerator_listener" "listener" {
   protocol        = "UDP"
 
   port_range {
-    from_port = 51820
-    to_port   = 51820
+    from_port = 443
+    to_port   = 443
   }
 }
 
@@ -92,4 +92,17 @@ resource "aws_globalaccelerator_endpoint_group" "endpoint_group" {
     weight      = 255
     client_ip_preservation_enabled = true
   }
+}
+
+
+data "aws_route53_zone" "selected" {
+  zone_id = var.zone_id
+}
+
+resource "aws_route53_record" "www" {
+  zone_id = data.aws_route53_zone.selected.zone_id
+  name    = local.full_domain
+  type    = "A"
+  ttl     = 180
+  records = [aws_globalaccelerator_accelerator.accelerator.ip_sets[0].ip_addresses[0]]
 }
