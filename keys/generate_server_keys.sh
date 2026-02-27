@@ -1,0 +1,1 @@
+wg genkey | tee server_private.key | wg pubkey > server_public.key
