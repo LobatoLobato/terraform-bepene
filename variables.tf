@@ -17,3 +17,8 @@ variable "public_key" {
   description = "The public key for SSH access"
   type        = string
 }
+
+variable "notification_email" {
+  description = "Email address to receive billing notifications"
+  type        = string
+}
