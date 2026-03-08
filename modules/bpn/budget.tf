@@ -68,7 +68,7 @@ resource "aws_budgets_budget_action" "stop_ec2_action" {
   definition {
     ssm_action_definition {
       action_sub_type = "STOP_EC2_INSTANCES"
-      region          = "sa-east-1"
+      region          = var.region
       instance_ids    = [aws_instance.instance.id]
     }
   }

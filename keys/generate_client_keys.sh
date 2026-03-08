@@ -36,8 +36,8 @@ echo "10.0.0.$NEXT_IP $PLAYER_NAME" >> "$IP_MAP_FILE"
 
 SERVER_PUB=$(cat keys/server_public.key)
 
-DOMAIN=$(cat main.tfvars | grep "^domain" | cut -d '"' -f 2)
-SUBDOMAIN=$(cat main.tfvars | grep "^subdomain" | cut -d '"' -f 2)
+DOMAIN=$(cat main.tfvars | grep "[[:space:]]domain[[:space:]]" | head -1 | cut -d '"' -f 2)
+SUBDOMAIN=$(cat main.tfvars | grep "[[:space:]]subdomain[[:space:]]" | head -1 | cut -d '"' -f 2)
 domain="$SUBDOMAIN.$DOMAIN"
 
 FOLDERS_ONLY=$(find keys -mindepth 1 -maxdepth 1 -type d)

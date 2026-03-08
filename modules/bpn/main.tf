@@ -10,7 +10,7 @@ resource "aws_globalaccelerator_listener" "listener" {
 
 resource "aws_globalaccelerator_endpoint_group" "endpoint_group" {
   listener_arn = aws_globalaccelerator_listener.listener.arn
-  endpoint_group_region = "sa-east-1"
+  endpoint_group_region = var.region
 
   endpoint_configuration {
     endpoint_id = aws_instance.instance.id

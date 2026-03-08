@@ -1,24 +1,17 @@
-variable "domain" {
-  description = "The domain to use for the subdomain"
-  type        = string
-}
+variable "replicas" {
+  description = "List of replicas to create"
+  type = list(object({
+    domain             = string
+    subdomain          = string
+    region             = string
+    zone_id            = string
+    public_key         = string
+    notification_email = string
+    vpn_server_port    = number
+  }))
 
-variable "subdomain" {
-  description = "The subdomain to use"
-  type        = string
-}
-
-variable "zone_id" {
-  description = "The Route53 zone ID where the record will be created"
-  type        = string
-}
-
-variable "public_key" {
-  description = "The public key for SSH access"
-  type        = string
-}
-
-variable "notification_email" {
-  description = "Email address to receive billing notifications"
-  type        = string
+  validation {
+    condition     = alltrue([for r in var.replicas : contains(["sa-east-1", "us-east-1"], r.region)])
+    error_message = "Region must be either sa-east-1 or us-east-1"
+  }
 }

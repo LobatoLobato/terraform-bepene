@@ -39,3 +39,8 @@ variable "notification_email" {
   description = "Email address to receive billing notifications"
   type        = string
 }
+
+variable "region" {
+  description = "AWS region to deploy the resources"
+  type        = string
+}

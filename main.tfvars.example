@@ -1,5 +1,9 @@
-domain = "notarealdomainihope.com"
-subdomain = "vpn"
-zone_id = "Z05XXXXXXXXXXXXXX"
-public_key = "ssh-ed25519 ....................... keyname"
-notification_email = "admin@notarealdomainihope.com"
+replicas = [{
+  domain             = "notarealdomainihope.com"
+  subdomain          = "vpn"
+  region             = "sa-east-1"
+  zone_id            = "Z05XXXXXXXXXXXXXX"
+  public_key         = "ssh-ed25519 ....................... keyname"
+  notification_email = "admin@notarealdomainihope.com"
+  vpn_server_port    = 443
+}]
