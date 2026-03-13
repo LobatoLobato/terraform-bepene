@@ -71,22 +71,29 @@ CGroupInitService() {
             ExecStartPre=/usr/bin/sh -c '/usr/bin/mountpoint -q /sys/fs/cgroup/net_cls || /usr/bin/mount -t cgroup -o net_cls net_cls /sys/fs/cgroup/net_cls'
 
             # Create the specific branch
-            ExecStart=/usr/bin/cgcreate -a $SUDO_USER:$SUDO_USER -g net_cls:$CGROUP
+            ExecStart=/usr/bin/cgcreate -a $SUDO_USER:$SUDO_USER -t $SUDO_USER:$SUDO_USER -g net_cls:skel0vpn
             ExecStart=/usr/bin/sh -c 'echo $CLASSID | /usr/bin/tee $CGROUP_PATH/net_cls.classid'
-            # ExecStart=/usr/bin/chown -R $SUDO_USER:$SUDO_USER $CGROUP_PATH
 
             [Install]
             WantedBy=multi-user.target
         "
 
-        echo "[#] Installing $service_id..."
+        echo "[#]  Installing $service_id..."
         trim_whitespace "$CGROUP_SERVICE" > $service_path
 
-        echo "[#] Enabling service..."
+        echo "[#]  Enabling service..."
         systemctl daemon-reload
-        systemctl enable $service_id
-        systemctl start $service_id
-        echo "[#] Done."
+
+        enable_result=$(trim_whitespace "$(systemctl enable $service_id 2>&1)")
+
+        if [ "$enable_result" == "" ]; then
+            systemctl restart $service_id
+        else
+            echo "[#]  $enable_result"
+            systemctl start $service_id
+        fi
+
+        echo "[#]  Done."
     elif [ "$1" == "uninstall" ]; then
         echo "[#] Removing $service_id..."
         systemctl stop $service_id 2>/dev/null
