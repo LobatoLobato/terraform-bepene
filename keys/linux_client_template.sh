@@ -41,13 +41,13 @@ WireguardConfig() {
             Endpoint = $ENDPOINT:443
             PersistentKeepalive = 25
         "
-        echo "  Installing profile."
+        echo "[#] Installing profile."
         trim_whitespace "$WIREGUARD_CONFIG" > /etc/wireguard/$PROFILE.conf
-        echo "  Done."
+        echo "[#] Done."
     elif [ "$1" == "uninstall"]; then
-        echo "  Uninstalling profile."
+        echo "[#] Uninstalling profile."
         rm -f /etc/wireguard/$PROFILE.conf
-        echo "  Done."
+        echo "[#] Done."
     fi
 }
 CGroupInitService() {
@@ -79,24 +79,24 @@ CGroupInitService() {
             WantedBy=multi-user.target
         "
 
-        echo "  Installing $service_id..."
+        echo "[#] Installing $service_id..."
         trim_whitespace "$CGROUP_SERVICE" > $service_path
 
-        echo "  Enabling service..."
+        echo "[#] Enabling service..."
         systemctl daemon-reload
         systemctl enable $service_id
         systemctl start $service_id
-        echo "  Done."
+        echo "[#] Done."
     elif [ "$1" == "uninstall" ]; then
-        echo "  Removing $service_id..."
+        echo "[#] Removing $service_id..."
         systemctl stop $service_id 2>/dev/null
         systemctl disable $service_id 2>/dev/null
         rm -f $service_path
         systemctl daemon-reload
 
-        echo "  Deleting $CGROUP cgroup..."
+        echo "[#] Deleting $CGROUP cgroup..."
         cgdelete -r net_cls:$CGROUP
-        echo "  Done."
+        echo "[#] Done."
     fi
 }
 
@@ -105,135 +105,141 @@ PacketFilters() {
     if [ "$1" == "set" ]; then
 
         # Add mark on packets originating from the cgroup
-        echo "  Setting cgroup filter..."
+        echo "[#] Setting cgroup filter..."
         iptables -t mangle -A OUTPUT -m cgroup --cgroup $CLASSID -j MARK --set-mark $MARK
 
         # Set MSS to MTU-40 to stop packets from being dropped
-        echo "  Setting tcp MSS limiter..."
+        echo "[#] Setting tcp MSS limiter..."
         iptables -t mangle -I OUTPUT -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss $(($MTU - 40))
 
         # Set nat to MASQUERADE so the vpn server doesn't see the wrong ip
-        echo "  Setting up packet NAT mask..."
+        echo "[#] Setting up packet NAT mask..."
         iptables -t nat -A POSTROUTING -o $PROFILE -j MASQUERADE
 
-        echo "  Done."
+        echo "[#] Done."
     elif [ "$1" == "unset" ]; then
-        echo "  Removing cgroup filter..."
+        echo "[#] Removing cgroup filter..."
         iptables -t mangle -D OUTPUT -m cgroup --cgroup $CLASSID -j MARK --set-mark $MARK 2>/dev/null
 
-        echo "  Removing tcp MSS limiter..."
+        echo "[#] Removing tcp MSS limiter..."
         iptables -t mangle -D OUTPUT -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss $(($MTU - 40)) 2>/dev/null
 
-        echo "  Removing packet NAT mask"
+        echo "[#] Removing packet NAT mask"
         iptables -t nat -D POSTROUTING -o $PROFILE -j MASQUERADE 2>/dev/null
 
-        echo "  Done."
+        echo "[#] Done."
     fi
 }
 RoutingRules() {
     echo "[Routing Rules]:"
     if [ "$1" == "set" ]; then
         # Packets with mark will go through the configured table
-        echo "  Packet Rule: route marked packets to table $TABLE..."
+        echo "[#] Packet Rule: route marked packets to table $TABLE..."
         ip rule add fwmark $MARK priority 500 table $TABLE
         # Route vpn server's ip to main so it doesnt get routed to itself
-        echo "  Packet Rule: route packets destined to the vpn server's endpoint through the main interface."
+        echo "[#] Packet Rule: route packets destined to the vpn server's endpoint through the main interface."
         ip rule add to $ENDPOINT priority 400 table main
         # Set the table as a route to the vpn
-        echo "  Setting table $TABLE as a route to the vpn($PROFILE) interface..."
+        echo "[#] Setting table $TABLE as a route to the vpn($PROFILE) interface..."
         ip route add default dev $PROFILE table $TABLE
 
         ip route flush cache
 
-        echo "  Done."
+        echo "[#] Done."
     elif [ "$1" == "unset" ]; then
-        echo "  Flushing $TABLE table..."
+        echo "[#] Flushing $TABLE table..."
         ip route flush table $TABLE
 
-        echo "  Deleting marked packet router"
+        echo "[#] Deleting marked packet router"
         ip rule del fwmark $MARK priority 500 2>/dev/null
 
-        echo "  Deleting vpn server endpoint router"
+        echo "[#] Deleting vpn server endpoint router"
         ip rule del to $ENDPOINT priority 400 2>/dev/null
 
-        echo "  Done."
+        echo "[#] Done."
     fi
 }
 
 vpn_status() {
-    echo "#--- VPN Status ---#"
+    echo "[#--- VPN Status ---#]"
 
     if [ -d "$CGROUP_PATH" ]; then
+        cgroup_ip=$(cgexec -g net_cls:$CGROUP curl -s4 ifconfig.me)
+
         echo "[CGROUP] $CGROUP is active (ClassID: $(cat $CGROUP_PATH/net_cls.classid))"
+        echo "[#] IP: $cgroup_ip"
     else
-        echo "[CGROUP] $CGROUP is missing"
+        echo "[CGROUP] $CGROUP is missing. Please re-run \"skel0vpn install\""
+        exit
     fi
 
     if ip link show $PROFILE >/dev/null 2>&1; then
+        tunnel_ip=$(curl -s4 --interface $PROFILE ifconfig.me)
+
         echo "[VPN] Interface $PROFILE is UP"
-        wg show $PROFILE | grep -E "transfer|latest handshake"
-        echo "#--- Latency Check ---#"
-        ping -c 3 -W 1 1.1.1.1 | tail -1 | awk '{print "ISP Latency: " $4}'
-        cgexec -g net_cls:$CGROUP ping -c 3 -W 1 1.1.1.1 | tail -1 | awk '{print "VPN Latency: " $4}'
+        echo "[#] IP: $tunnel_ip"
+        echo "[#] Interface: $(ip route show table $TABLE)"
+        wg_info=$(wg show $PROFILE)
+
+        echo "[#] Latest Handshake: $(echo "$wg_info" | grep -E "latest handshake" | sed 's/.*: //')"
+        echo "[#] Session Transfer: $(echo "$wg_info" | grep -E "transfer" | sed 's/.*: //')"
+
+        echo "[#] Latency Check:"
+        ping -c 3 -W 1 1.1.1.1 | tail -1 | awk '{print "[#]   ISP Latency: " $4}'
+        cgexec -g net_cls:$CGROUP ping -c 3 -W 1 1.1.1.1 | tail -1 | awk '{print "[#]   VPN Latency: " $4}'
     else
         echo "[VPN] Interface $PROFILE is DOWN"
     fi
 }
 
 if [ $1 == "install" ]; then
-    echo "Installing VPN..."
+    echo "[#--- Installing VPN ---#]"
 
     WireguardConfig install
 
     CGroupInitService install
 
-    echo "Installing script to $INSTALL_PATH..."
+    echo "[#] Installing script to $INSTALL_PATH..."
     cp $SCRIPT_PATH $INSTALL_PATH
     chmod +x $INSTALL_PATH
 
-    echo "Done."
+    echo "[#] Done."
+    echo "[#] VPN Installed."
 elif [ $1 == "uninstall" ]; then
-    echo "Uninstalling VPN..."
+    echo "[#--- Uninstalling VPN ---#]"
 
     CGroupInitService uninstall
 
     WireguardConfig uninstall
 
-    echo "Uninstalling $INSTALL_PATH..."
+    echo "[#] Uninstalling $INSTALL_PATH..."
     rm -f $INSTALL_PATH
-    echo "Done."
+    echo "[#] Done."
 
-    echo "VPN uninstalled."
+    echo "[#] VPN uninstalled."
 elif [ $1 == "up" ]; then
-    echo "Bringing up VPN..."
+    echo "[#]--- Bringing up VPN ---[#]"
+    echo "[Wireguard]"
     sudo wg-quick up $PROFILE
 
     PacketFilters set
 
     RoutingRules set
 
-    machine_vpn_ip=$(curl -4 --interface $PROFILE ifconfig.me)
-    cg_machine_vpn_ip=$(cgexec -g net_cls:$CGROUP curl -4 ifconfig.me)
-
-    if [ "$machine_vpn_ip" == "$cg_machine_vpn_ip" ] && [ -n "$machine_vpn_ip" ]; then
-      echo "Verification Success. VPN is up and running."
-    else
-      echo "Verification Failed. Check 'wg show'."
-    fi
-
     vpn_status
 elif [ $1 == "down" ]; then
-    echo "Tearing down VPN..."
+    echo "[#--- Tearing down VPN ---#]"
 
     RoutingRules unset
 
     PacketFilters unset
 
+    echo "[Wireguard]"
     sudo wg-quick down $PROFILE
 
     ip route flush cache
 
-    echo "Cleanup complete."
+    echo "[#] Cleanup complete."
 elif [ "$1" == "run" ]; then
     shift
     if [ -d "$CGROUP_PATH" ]; then
