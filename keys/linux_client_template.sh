@@ -217,6 +217,9 @@ if [ $1 == "install" ]; then
 elif [ $1 == "uninstall" ]; then
     echo "[#--- Uninstalling VPN ---#]"
 
+    echo "[#] Tearing down the vpn"
+    skel0vpn down
+
     CGroupInitService uninstall
 
     WireguardConfig uninstall
