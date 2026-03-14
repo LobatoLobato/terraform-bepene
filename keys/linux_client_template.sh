@@ -15,12 +15,20 @@ TABLE="1221"
 SCRIPT_PATH=$(realpath "$0")
 INSTALL_PATH=/usr/local/bin/skel0vpn
 
+WIREGUARD_CONFIG_PATH=/etc/wireguard/$PROFILE.conf
+
 CGROUP_SERVICE_ID="$CGROUP-cgroup-init.service"
 CGROUP_SERVICE_PATH="/etc/systemd/system/$CGROUP_SERVICE_ID"
 
+if [ -z "$1" ]; then
+    echo "Usage: $0 {install|uninstall|up|down|run|status|monitor|test}"
+    exit 0
+fi
+
 # Elevate script
 if [ "$EUID" -ne 0 ] && [ "$1" != "run" ]; then
-   if [ $DBG == 1 ]; then exec sudo -E "$0" "$@"
+   if [ -n "${DBG+x}" ] && [ $DBG == 1 ]; then
+       exec sudo -E "$0" "$@"
    else
        exec sudo "$0" "$@"
    fi
@@ -54,11 +62,11 @@ WireguardConfig() {
     echo "[Wireguard]:"
     if [ "$1" == "install" ]; then
         echo "[#] Installing profile."
-        trim_whitespace "$WIREGUARD_CONFIG" > /etc/wireguard/$PROFILE.conf
+        trim_whitespace "$WIREGUARD_CONFIG" > $WIREGUARD_CONFIG_PATH
         echo "[#] Done."
     elif [ "$1" == "uninstall" ]; then
         echo "[#] Uninstalling profile."
-        rm -f /etc/wireguard/$PROFILE.conf
+        rm -f $WIREGUARD_CONFIG_PATH
         echo "[#] Done."
     fi
 }
@@ -215,17 +223,6 @@ vpn_status() {
     fi
 }
 
-test_echo_ok() {
-    echo -e "[#] \e[32m$1\e[0m"
-}
-test_echo_fail() {
-    echo -e "[#] \e[31m$1\e[0m"
-}
-
-check_owner() {
-    [[ -z $(find "$1" \( ! -user "$2" -o ! -group "$3" \) -print -quit) ]]
-}
-
 if [ $1 == "install" ]; then
     echo "[#--- Installing VPN ---#]"
 
@@ -290,30 +287,37 @@ elif [ "$1" == "monitor" ]; then
     else
         echo "[VPN] Interface $PROFILE is DOWN"
     fi
-elif [ "$1" == "status" ]; then vpn_status
-elif [ "$1" == "test" ]; then
-    ANSI_GREEN='\e[32m'
-    ANSI_RED='\e[31m'
-    ANSI_RESET='\e[0m'
+elif [ "$1" == "status" ]; then
+    vpn_status
+fi
 
-    verbose=false
-    if [ ! -z "$2" ] && [ "$2" = "-v" ]; then
-        verbose=true
-    fi
 
-    echo "[#--- Tests ---#]"
+#=================================== TESTS ===================================#
+test_echo_ok() {
+    echo -e "[#] \e[32m$1\e[0m"
+}
+test_echo_fail() {
+    echo -e "[#] \e[31m$1\e[0m"
+}
+check_owner() {
+    [[ -z $(find "$1" \( ! -user "$2" -o ! -group "$3" \) -print -quit) ]]
+}
+
+test_install() {
+    verbose=$1
+
     echo "[#command:install]:"
     # Wireguard config
-    if [ ! -f "/etc/wireguard/$PROFILE.conf" ]; then
+    if [ ! -f "$WIREGUARD_CONFIG_PATH" ]; then
         test_echo_fail "Wireguard profile installation: FAILED"
-        test_echo_fail "  MISSING /etc/wireguard/$PROFILE.conf FILE"
-    elif diff -qB "/etc/wireguard/$PROFILE.conf" <(WireguardConfig get) >/dev/null; then
+        test_echo_fail "  MISSING $WIREGUARD_CONFIG_PATH FILE"
+    elif diff -qB "$WIREGUARD_CONFIG_PATH" <(WireguardConfig get) >/dev/null; then
         test_echo_ok "Wireguard profile installation: OK"
     else
         test_echo_fail "Wireguard profile installation: FAILED"
-        test_echo_fail "  FILE IN /etc/wireguard/$PROFILE.conf DOES NOT MATCH TEMPLATE"
+        test_echo_fail "  FILE IN $WIREGUARD_CONFIG_PATH DOES NOT MATCH TEMPLATE"
         if [ $verbose == "true" ]; then
-            diff -B "/etc/wireguard/$PROFILE.conf" <(WireguardConfig get)
+            diff -B "$WIREGUARD_CONFIG_PATH" <(WireguardConfig get)
         fi
     fi
 
@@ -381,14 +385,81 @@ elif [ "$1" == "test" ]; then
     else
         test_echo_ok "Script installation: OK"
     fi
-    # uninstall test
+}
+test_uninstall() {
+    verbose=$1
+
+    echo "[#command:uninstall]:"
+    # VPN tear down
+    if wg show $PROFILE &>/dev/null; then
+        test_echo_fail "VPN tear down: FAILED"
+        test_echo_fail "  VPN is still up."
+    else
+        test_echo_ok "VPN tear down: OK"
+    fi
+
+    # Wireguard config removal
+    if [ -f "$WIREGUARD_CONFIG_PATH" ]; then
+        test_echo_fail "Wireguard config removal: FAILED"
+        test_echo_fail "  $PROFILE.conf file is still present in $WIREGUARD_CONFIG_PATH."
+    else
+        test_echo_ok "Wireguard config removal: OK"
+    fi
+
+    # CGroup creation and configuration service removal
+    if systemctl is-active -q $CGROUP_SERVICE_ID; then
+        test_echo_fail "CGroup configuration and creation service removal: FAILED"
+        test_echo_fail "  $CGROUP_SERVICE_ID didn't stop."
+    elif systemctl is-enabled -q $CGROUP_SERVICE_ID; then
+        test_echo_fail "CGroup configuration and creation service removal: FAILED"
+        test_echo_fail "  $CGROUP_SERVICE_ID is still enabled."
+    elif [ -f "$CGROUP_SERVICE_PATH" ]; then
+        test_echo_fail "CGroup configuration and creation service removal: FAILED"
+        test_echo_fail "  $CGROUP_SERVICE_PATH was not removed."
+    else
+        test_echo_ok "CGroup configuration and creation service removal: OK"
+    fi
+
+    # Cgroup deletion
+    if [ -d "$CGROUP_PATH" ]; then
+        test_echo_fail "CGroup deletion: FAILED"
+        test_echo_fail "  $CGROUP was not deleted, it is still present in $CGROUP_PATH"
+    else
+        test_echo_ok "CGroup deletion: OK"
+    fi
+
+    # Script removal
+    if [ -f "$INSTALL_PATH" ]; then
+        test_echo_fail "Script removal: FAILED"
+        test_echo_fail "  skel0vpn is still present at $INSTALL_PATH"
+    else
+        test_echo_ok "Script removal: OK"
+    fi
+}
+
+if [ "$1" == "test" ]; then
+    test="$2"
+    verbose=false
+    if [ ! -z "$3" ] && [ "$3" = "-v" ]; then
+        verbose=true
+    fi
+
+    echo "[#--- Tests ---#]"
+    if [ "$test" == "install" ]; then
+        test_install verbose
+    elif [ "$test" == "uninstall" ]; then
+        test_uninstall verbose
+    elif [ "$test" == "up" ]; then
+        # test_uninstall verbose
+    elif [ "$test" == "down" ]; then
+        # test_uninstall verbose
+    elif [ "$test" == "run" ]; then
+        # test_uninstall verbose
+    fi
 
     # up test
 
     # down test
 
     # run test
-
-else
-    echo "Usage: $0 {install|uninstall|up|down|run|status|monitor|test}"
 fi
