@@ -331,7 +331,7 @@ int_cmp() {
     if [ "$n1" -gt "$n2" ]; then
       return 1
     elif [ "$n2" -gt "$n1" ]; then
-      return -1
+      return 2
     else
       return 0
     fi
@@ -343,7 +343,7 @@ uint_cmp() {
     if [ "$n1" -gt "$n2" ]; then
       return 1
     elif [ "$n2" -gt "$n1" ]; then
-      return -1
+      return 2
     else
       return 0
     fi
@@ -414,7 +414,7 @@ test_install() {
         test_echo_fail "CGroup configuration and creation: FAILED"
         test_echo_fail "  some or all file/dir gid:pid in $CGROUP_PATH are wrong"
         test_echo_fail "  they should all be owned by $SUDO_USER:$SUDO_USER"
-        if [$verbose -gt 0 ]; then
+        if [ $verbose -gt 0 ]; then
             test_echo_fail "$(ls -lR "$CGROUP_PATH")"
         fi
     elif ! uint_cmp $conf_classid $CLASSID; then
