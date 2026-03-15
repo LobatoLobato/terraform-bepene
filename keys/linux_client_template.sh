@@ -71,22 +71,29 @@ CGroupInitService() {
             ExecStartPre=/usr/bin/sh -c '/usr/bin/mountpoint -q /sys/fs/cgroup/net_cls || /usr/bin/mount -t cgroup -o net_cls net_cls /sys/fs/cgroup/net_cls'
 
             # Create the specific branch
-            ExecStart=/usr/bin/cgcreate -a $SUDO_USER:$SUDO_USER -g net_cls:$CGROUP
+            ExecStart=/usr/bin/cgcreate -a $SUDO_USER:$SUDO_USER -t $SUDO_USER:$SUDO_USER -g net_cls:skel0vpn
             ExecStart=/usr/bin/sh -c 'echo $CLASSID | /usr/bin/tee $CGROUP_PATH/net_cls.classid'
-            # ExecStart=/usr/bin/chown -R $SUDO_USER:$SUDO_USER $CGROUP_PATH
 
             [Install]
             WantedBy=multi-user.target
         "
 
-        echo "[#] Installing $service_id..."
+        echo "[#]  Installing $service_id..."
         trim_whitespace "$CGROUP_SERVICE" > $service_path
 
-        echo "[#] Enabling service..."
+        echo "[#]  Enabling service..."
         systemctl daemon-reload
-        systemctl enable $service_id
-        systemctl start $service_id
-        echo "[#] Done."
+
+        enable_result=$(trim_whitespace "$(systemctl enable $service_id 2>&1)")
+
+        if [ "$enable_result" == "" ]; then
+            systemctl restart $service_id
+        else
+            echo "[#]  $enable_result"
+            systemctl start $service_id
+        fi
+
+        echo "[#]  Done."
     elif [ "$1" == "uninstall" ]; then
         echo "[#] Removing $service_id..."
         systemctl stop $service_id 2>/dev/null
@@ -131,6 +138,8 @@ PacketFilters() {
     fi
 }
 RoutingRules() {
+    endpoint_ip=$(ping -c 1 $ENDPOINT | awk -F '[()]' '/PING/ {print $2}')
+
     echo "[Routing Rules]:"
     if [ "$1" == "set" ]; then
         # Packets with mark will go through the configured table
@@ -138,7 +147,7 @@ RoutingRules() {
         ip rule add fwmark $MARK priority 500 table $TABLE
         # Route vpn server's ip to main so it doesnt get routed to itself
         echo "[#] Packet Rule: route packets destined to the vpn server's endpoint through the main interface."
-        ip rule add to $ENDPOINT priority 400 table main
+        ip rule add to $endpoint_ip priority 400 table main
         # Set the table as a route to the vpn
         echo "[#] Setting table $TABLE as a route to the vpn($PROFILE) interface..."
         ip route add default dev $PROFILE table $TABLE
@@ -154,7 +163,7 @@ RoutingRules() {
         ip rule del fwmark $MARK priority 500 2>/dev/null
 
         echo "[#] Deleting vpn server endpoint router"
-        ip rule del to $ENDPOINT priority 400 2>/dev/null
+        ip rule del to $endpoint_ip priority 400 2>/dev/null
 
         echo "[#] Done."
     fi
@@ -207,6 +216,9 @@ if [ $1 == "install" ]; then
     echo "[#] VPN Installed."
 elif [ $1 == "uninstall" ]; then
     echo "[#--- Uninstalling VPN ---#]"
+
+    echo "[#] Tearing down the vpn"
+    skel0vpn down
 
     CGroupInitService uninstall
 
