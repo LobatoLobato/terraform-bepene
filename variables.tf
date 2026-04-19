@@ -16,3 +16,25 @@ variable "replicas" {
     error_message = "Region must be either sa-east-1 or us-east-1"
   }
 }
+
+variable "gcp_replicas" {
+  description = "List of GCP replicas to create"
+  type = list(object({
+    domain             = string
+    subdomain          = string
+    gcp_region         = string
+    gcp_zone           = string
+    machine_type       = optional(string, "e2-micro")
+    zone_id            = string
+    public_key         = string
+    notification_email = string
+    vpn_server_port    = number
+    billing_account_id = string
+  }))
+  default = []
+}
+
+variable "gcp_billing_project" {
+  description = "GCP project ID to use for billing budgets and quota-based APIs"
+  type        = string
+}

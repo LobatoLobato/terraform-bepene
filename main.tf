@@ -134,3 +134,36 @@ module "bpn_us_east_1" {
   budgets_role_arn = data.aws_iam_role.budgets_role.arn
 
 }
+
+locals {
+  gcp_replicas_southamerica_east1 = { for r in var.gcp_replicas : r.subdomain => r if r.gcp_region == "southamerica-east1" }
+}
+
+module "bpn_gcp_southamerica_east1" {
+
+  for_each = local.gcp_replicas_southamerica_east1
+
+  source = "./modules/bpn_gcp"
+
+  providers = {
+    google = google.southamerica_east1
+    aws    = aws.sa_east_1
+  }
+
+  zone_id   = each.value.zone_id
+  domain    = each.value.domain
+  subdomain = each.value.subdomain
+
+  gcp_region = each.value.gcp_region
+  gcp_zone   = each.value.gcp_zone
+
+  machine_type = each.value.machine_type
+
+  vpn_server_port = each.value.vpn_server_port
+
+  public_key = each.value.public_key
+
+  notification_email = each.value.notification_email
+
+  billing_account_id = each.value.billing_account_id
+}

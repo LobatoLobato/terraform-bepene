@@ -52,8 +52,8 @@ Address = 10.0.0.1/24
 ListenPort = \${port}
 PrivateKey = $SERVER_PRIV
 
-PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o ens5 -j MASQUERADE
-PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o ens5 -j MASQUERADE
+PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o \${iface} -j MASQUERADE
+PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o \${iface} -j MASQUERADE
 $PEER_SECTIONS
 WGEOF
 
