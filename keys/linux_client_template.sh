@@ -21,7 +21,7 @@ USER_ENV=$(export | grep -vE "SUDO_|LS_COLORS|SSH_" | sed 's/^declare -x //' | s
 INSTALLED=0; #INSTALLED Flag
 
 COMMANDS="native|flatpak|install|uninstall|rule|test|help";
-[ $INSTALLED -eq 1 ] && COMMANDS="native|flatpak|install|uninstall|rule|help";
+[ $INSTALLED -eq 1 ] && COMMANDS="native|flatpak|endpoint|rule|uninstall|help";
 
 COMMAND="$1";
 STEAM_TYPE="$1"; [ "$COMMAND" == "test" ] && STEAM_TYPE="$2";
@@ -38,11 +38,10 @@ if [[ -z "$COMMAND" ]] || ! grep -qs "$COMMAND" <<< "$COMMANDS" || [[ "$COMMAND"
     echo "Usage: $0 {$COMMANDS}";
     exit 1;
 elif [[ "$COMMAND" == "help" ]]; then
-    echo "Usage: $0 {native|flatpak|install|uninstall|rule|help}";
+    echo "Usage: $0 {$COMMANDS}";
     echo "  $0 native - Runs native steam inside the vpn.";
     echo "  $0 flatpak - Runs flatpak steam inside the vpn.";
     echo "  $0 install - Installs the script.";
-    echo "  $0 update - Updates the installed script.";
     echo "  $0 uninstall - Uninstalls the script and all rules and configurations.";
     echo "  $0 rule - Split tunneling rules configuration.";
     echo "          add <alias> <exe> - Adds a rule targeting the game's executable.";
@@ -134,7 +133,7 @@ steamctl() {
 
         local lib_vdf="$steam_root/steamapps/libraryfolders.vdf";
         if [ ! -f "$lib_vdf" ]; then
-            echo "Erro: libraryfolders.vdf not found.";
+            echo "Error: libraryfolders.vdf not found.";
             return 1;
         fi
 
@@ -250,12 +249,17 @@ cleanup() {
 case "$COMMAND" in
 install)
     echo "[#--- Installing VPN ---#]";
+
     mkdir -p "$SCRIPT_CONFIG_PATH";
 
-    info "Creating rules file...";
-    touch "$RULES_FILE_PATH";
+    if [ ! -f "$RULES_FILE_PATH" ]; then
+        info "Creating rules file...";
+        touch "$RULES_FILE_PATH";
+    fi
 
-    vpnctl install_conf;
+    if [ ! -f "$WIREGUARD_CONF_PATH" ]; then
+        vpnctl install_conf;
+    fi
 
     echo "[#] Installing script to $INSTALL_PATH...";
     cp "$SCRIPT_PATH" "$INSTALL_PATH";
@@ -266,14 +270,17 @@ install)
     echo "[#] VPN Installed.";
 ;;
 uninstall)
+    keep_config="$1"
     echo "[#--- Uninstalling VPN ---#]";
 
-    info "Deleting rules file...";
-    rm "$RULES_FILE_PATH";
+    if [[ -z "$keep_config" || "$keep_config" != "--keep_config" ]]; then
+        info "Deleting rules file...";
+        rm "$RULES_FILE_PATH";
 
-    vpnctl uninstall_conf;
+        vpnctl uninstall_conf;
 
-    rmdir "$SCRIPT_CONFIG_PATH";
+        rmdir "$SCRIPT_CONFIG_PATH";
+    fi
 
     echo "[#] Uninstalling $INSTALL_PATH...";
     rm -f "$INSTALL_PATH";
