@@ -38,7 +38,7 @@ resource "aws_security_group" "vpn_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-/* not needed for now   
+  /* not needed for now   
 ingress {
     description = "SSH Access"
     from_port   = 22
@@ -64,6 +64,7 @@ resource "aws_instance" "instance" {
   user_data = templatefile("${path.root}/setup.tpl", {
     domain = local.full_domain
     port   = var.vpn_server_port
+    iface  = "ens5"
   })
 
   tags = {
