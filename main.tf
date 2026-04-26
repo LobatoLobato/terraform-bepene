@@ -8,6 +8,7 @@ data "aws_iam_role" "budgets_role" {
 }
 
 resource "aws_budgets_budget" "monthly_cost_budget" {
+  count = length(var.replicas) > 0 ? 1 : 0
   name              = "BepeneMonthlyBudget"
   budget_type       = "COST"
   limit_amount      = "50.0"
@@ -96,7 +97,7 @@ module "bpn_sa_east_1" {
 
   notification_email = each.value.notification_email
 
-  budget_name      = aws_budgets_budget.monthly_cost_budget.name
+  budget_name      = aws_budgets_budget.monthly_cost_budget[0].name
   budgets_role_arn = data.aws_iam_role.budgets_role.arn
 
 }
@@ -130,7 +131,7 @@ module "bpn_us_east_1" {
 
   notification_email = each.value.notification_email
 
-  budget_name      = aws_budgets_budget.monthly_cost_budget.name
+  budget_name      = aws_budgets_budget.monthly_cost_budget[0].name
   budgets_role_arn = data.aws_iam_role.budgets_role.arn
 
 }
