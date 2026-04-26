@@ -1,5 +1,4 @@
 variable "replicas" {
-  description = "List of replicas to create"
   type = list(object({
     domain             = string
     subdomain          = string
@@ -10,6 +9,7 @@ variable "replicas" {
     notification_email = string
     vpn_server_port    = number
   }))
+  default = []
 
   validation {
     condition     = alltrue([for r in var.replicas : contains(["sa-east-1", "us-east-1"], r.region)])
