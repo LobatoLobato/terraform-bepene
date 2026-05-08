@@ -7,7 +7,7 @@ ENDPOINT="$TEMPLATE_ENDPOINT";
 # If you dont know what is going on don't mess with these variables
 PROFILE="skel0vpn_st";
 NETNS="vpn";
-
+MTU=1420
 SCRIPT_PATH="$(realpath "$0")";
 INSTALL_PATH="/usr/local/bin/skel0vpn";
 SCRIPT_CONFIG_PATH=/etc/skel0vpn;
@@ -191,7 +191,7 @@ vpnctl() {
         wg setconf wg0 "$WIREGUARD_CONF_PATH";
 
         ip link set wg0 netns "$NETNS";
-
+        ip link set dev wg0 mtu "$MTU";
         ip -n "$NETNS" addr add "$ADDRESS" dev wg0;
 
         ip netns exec "$NETNS" ip link set lo up;
